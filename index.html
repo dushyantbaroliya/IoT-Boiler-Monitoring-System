@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IoT Pressure Vessel Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --color-background-primary: #ffffff;
+      --color-background-secondary: #f5f5f4;
+      --color-text-primary: #1c1c1c;
+      --color-text-secondary: #6b7280;
+      --color-text-tertiary: #9ca3af;
+      --color-border-tertiary: #e5e7eb;
+      --color-border-secondary: #d1d5db;
+      --color-border-info: #93c5fd;
+      --color-background-info: #eff6ff;
+      --color-text-info: #1d4ed8;
+      --border-radius-lg: 10px;
+      --border-radius-md: 7px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: #f0f0ef;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .dash {
+      font-family: var(--font-sans);
+      background: var(--color-background-primary);
+      border-radius: var(--border-radius-lg);
+      border: 0.5px solid var(--color-border-tertiary);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+      max-width: 860px;
+      width: 100%;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--color-background-secondary);
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 10px; }
+    .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #1D9E75; }
+    .topbar-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+    .topbar-sub { font-size: 12px; color: var(--color-text-secondary); }
+    .status-pill { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 500; }
+    .pill-live { background: #E1F5EE; color: #085041; }
+    .pill-alert { background: #FCEBEB; color: #791F1F; }
+    .pill-ok { background: #EAF3DE; color: #27500A; }
+
+    .vessels-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 12px 14px 6px;
+    }
+    .vessel-card {
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 12px;
+    }
+    .vessel-card.alerting { border-color: #E24B4A; border-width: 1.5px; }
+    .vc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .vc-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+    .vc-status { width: 8px; height: 8px; border-radius: 50%; background: #639922; }
+    .vc-status.red { background: #E24B4A; animation: blink 0.8s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .gauge-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .gauge-box {
+      flex: 1;
+      background: var(--color-background-secondary);
+      border-radius: var(--border-radius-md);
+      padding: 8px;
+      text-align: center;
+    }
+    .gauge-label { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 2px; }
+    .gauge-value { font-size: 20px; font-weight: 500; color: var(--color-text-primary); }
+    .gauge-unit { font-size: 10px; color: var(--color-text-secondary); }
+    .gauge-bar-wrap { height: 5px; background: var(--color-border-tertiary); border-radius: 99px; margin-top: 4px; overflow: hidden; }
+    .gauge-bar { height: 5px; border-radius: 99px; transition: width 1s ease; }
+    .bar-temp { background: #EF9F27; }
+    .bar-press { background: #378ADD; }
+    .bar-alert { background: #E24B4A; }
+
+    .alert-banner {
+      display: none;
+      margin: 0 14px 8px;
+      background: #FCEBEB;
+      border: 0.5px solid #F09595;
+      border-radius: var(--border-radius-md);
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #791F1F;
+      font-weight: 500;
+      align-items: center;
+      gap: 8px;
+    }
+    .alert-banner.visible { display: flex; }
+    .alert-icon {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #E24B4A; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0;
+    }
+    .alert-icon svg { width: 8px; height: 8px; }
+
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 6px 14px 10px;
+    }
+    .chart-card {
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 12px;
+    }
+    .chart-title { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 8px; }
+    .legend-row { display: flex; gap: 12px; margin-bottom: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-secondary); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px 12px;
+      flex-wrap: wrap;
+    }
+    .ctrl-label { font-size: 12px; color: var(--color-text-secondary); }
+    .ctrl-btn {
+      font-size: 12px;
+      padding: 5px 14px;
+      border-radius: var(--border-radius-md);
+      border: 0.5px solid var(--color-border-secondary);
+      background: var(--color-background-primary);
+      color: var(--color-text-primary);
+      cursor: pointer;
+    }
+    .ctrl-btn:hover { background: var(--color-background-secondary); }
+    .ctrl-btn.active {
+      background: var(--color-background-info);
+      color: var(--color-text-info);
+      border-color: var(--color-border-info);
+    }
+
+    .log-card {
+      margin: 0 14px 12px;
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 10px 12px;
+    }
+    .log-title { font-size: 12px; font-weight: 500; margin-bottom: 6px; color: var(--color-text-primary); }
+    .log-list { list-style: none; }
+    .log-item {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      padding: 2px 0;
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      display: flex;
+      gap: 8px;
+    }
+    .log-item:last-child { border-bottom: none; }
+    .log-time { color: var(--color-text-tertiary); min-width: 52px; }
+    .log-msg-alert { color: #A32D2D; font-weight: 500; }
+    .log-msg-ok { color: #3B6D11; }
+  </style>
+</head>
+<body>
+
+<div class="dash">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-dot"></div>
+      <div>
+        <div class="topbar-title">IoT Pressure Vessel Monitor</div>
+        <div class="topbar-sub">3 vessels · ESP32 · ThingSpeak + Blynk</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="status-pill pill-live" id="live-pill">● LIVE</span>
+      <span style="font-size:11px;color:var(--color-text-tertiary);" id="tick-time">00:00</span>
+    </div>
+  </div>
+
+  <!-- Vessel Cards -->
+  <div class="vessels-row">
+    <!-- Vessel 1 -->
+    <div class="vessel-card" id="vc1">
+      <div class="vc-header">
+        <span class="vc-title">Vessel 1</span>
+        <div class="vc-status" id="vs1"></div>
+      </div>
+      <div class="gauge-row">
+        <div class="gauge-box">
+          <div class="gauge-label">Temperature</div>
+          <div class="gauge-value" id="t1">--</div>
+          <div class="gauge-unit">°C</div>
+          <div class="gauge-bar-wrap"><div class="gauge-bar bar-temp" id="bt1" style="width:0%"></div></div>
+        </div>
+        <div class="gauge-box">
+          <div class="gauge-label">Pressure</div>
+          <div class="gauge-value" id="p1">--</div>
+          <div class="gauge-unit">bar</div>
+          <div class="gauge-bar-wrap"><div class="gauge-bar bar-press" id="bp1" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Vessel 2 -->
+    <div class="vessel-card" id="vc2">
+      <div class="vc-header">
+        <span class="vc-title">Vessel 2</span>
+        <div class="vc-status" id="vs2"></div>
+      </div>
+      <div class="gauge-row">
+        <div class="gauge-box">
+          <div class="gauge-label">Temperature</div>
+          <div class="gauge-value" id="t2">--</div>
+          <div class="gauge-unit">°C</div>
+          <div class="gauge-bar-wrap"><div class="gauge-bar bar-temp" id="bt2" style="width:0%"></div></div>
+        </div>
+        <div class="gauge-box">
+          <div class="gauge-label">Pressure</div>
+          <div class="gauge-value" id="p2">--</div>
+          <div class="gauge-unit">bar</div>
+          <div class="gauge-bar-wrap"><div class="gauge-bar bar-press" id="bp2" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Vessel 3 -->
+    <div class="vessel-card" id="vc3">
+      <div class="vc-header">
+        <span class="vc-title">Vessel 3</span>
+        <div class="vc-status" id="vs3"></div>
+      </div>
+      <div class="gauge-row">
+        <div class="gauge-box">
+          <div class="gauge-label">Temperature</div>
+          <div class="gauge-value" id="t3">--</div>
+          <div class="gauge-unit">°C</div>
+          <div class="gauge-bar-wrap"><div class="gauge-bar bar-temp" id="bt3" style="width:0%"></div></div>
+        </div>
+        <div class="gauge-box">
+          <div class="gauge-label">Pressure</div>
+          <div class="gauge-value" id="p3">--</div>
+          <div class="gauge-unit">bar</div>
+          <div class="gauge-bar-wrap"><div class="gauge-bar bar-press" id="bp3" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Banner -->
+  <div class="alert-banner" id="alert-banner">
+    <div class="alert-icon">
+      <svg viewBox="0 0 8 8" fill="none">
+        <path d="M4 1v3M4 6h.01" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span id="alert-msg">Pressure threshold exceeded!</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-row">
+    <span class="ctrl-label">Heating speed:</span>
+    <button class="ctrl-btn active" id="btn-slow" onclick="setSpeed('slow')">Slow</button>
+    <button class="ctrl-btn" id="btn-fast" onclick="setSpeed('fast')">Fast</button>
+    <span class="ctrl-label" style="margin-left:8px;">Threshold:</span>
+    <input type="range" min="1.5" max="4.5" step="0.1" value="3.5" id="thresh-slider"
+      style="width:90px;" oninput="updateThresh(this.value)">
+    <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);" id="thresh-label">3.5 bar</span>
+    <button class="ctrl-btn" style="margin-left:auto;" onclick="resetSim()">Reset</button>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Temperature vs time</div>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:#EF9F27;"></div>Vessel 1</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#378ADD;"></div>Vessel 2</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75;"></div>Vessel 3</div>
+      </div>
+      <div style="position:relative;width:100%;height:160px;">
+        <canvas id="tempChart" role="img" aria-label="Temperature vs time line chart for 3 vessels">
+          Live temperature data for three pressure vessels over time.
+        </canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Pressure vs time</div>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:#EF9F27;"></div>Vessel 1</div>
+        <div class="legend-item"><div class="legend-dot" style="background:transparent;border:1.5px dashed #185FA5;"></div>Vessel 2</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75;"></div>Vessel 3</div>
+      </div>
+      <div style="position:relative;width:100%;height:160px;">
+        <canvas id="pressChart" role="img" aria-label="Pressure vs time line chart for 3 vessels">
+          Live pressure data for three pressure vessels over time.
+        </canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Log -->
+  <div class="log-card">
+    <div class="log-title">Event log</div>
+    <ul class="log-list" id="log-list">
+      <li class="log-item">
+        <span class="log-time">00:00</span>
+        <span class="log-msg-ok">System initialised — all 3 ESP32 units online</span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  // ── Constants ──────────────────────────────────────────────────────────────
+  const MAX_PTS  = 30;
+  const TEMP_MAX = 120;
+  const PRESS_MAX = 5;
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let simTime   = 0;
+  let speed     = 1;
+  let threshold = 3.5;
+  let intervalId = null;
+  let prevAlert  = [false, false, false];
+
+  const labels = [];
+  const tData  = [[], [], []];
+  const pData  = [[], [], []];
+
+  // ── Colours / dash patterns ────────────────────────────────────────────────
+  const tColors = ['#EF9F27', '#378ADD', '#1D9E75'];
+  const pDash   = [[], [6, 4], []];
+
+  // ── Chart factory ─────────────────────────────────────────────────────────
+  const chartOpts = (yLabel, yMax) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index', intersect: false,
+        callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(128,128,128,0.08)' },
+        ticks: { color: '#888780', font: { size: 10 }, maxTicksLimit: 8 }
+      },
+      y: {
+        min: 0, max: yMax,
+        grid: { color: 'rgba(128,128,128,0.08)' },
+        ticks: { color: '#888780', font: { size: 10 } },
+        title: { display: true, text: yLabel, color: '#888780', font: { size: 10 } }
+      }
+    }
+  });
+
+  const tChart = new Chart(document.getElementById('tempChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: tData.map((d, i) => ({
+        label: 'Vessel ' + (i + 1), data: d,
+        borderColor: tColors[i], borderWidth: 1.5,
+        pointRadius: 0, tension: 0.4, fill: false
+      }))
+    },
+    options: chartOpts('°C', TEMP_MAX)
+  });
+
+  const pChart = new Chart(document.getElementById('pressChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: pData.map((d, i) => ({
+        label: 'Vessel ' + (i + 1), data: d,
+        borderColor: tColors[i], borderWidth: 1.5,
+        borderDash: pDash[i], pointRadius: 0, tension: 0.4, fill: false
+      }))
+    },
+    options: chartOpts('bar', PRESS_MAX)
+  });
+
+  // ── Physics models ─────────────────────────────────────────────────────────
+  function tempModel(t, v) {
+    const offsets = [0, -0.8, 1.1];
+    return Math.min(TEMP_MAX, 25 + (t * 2.7 + offsets[v]) * (1 - Math.exp(-t / 18)));
+  }
+
+  function pressModel(t, v) {
+    const offsets = [0, -0.05, 0.06];
+    const temp = tempModel(t, v);
+    const p = Math.max(0, ((temp - 60) / 40) * 2.5 + offsets[v]);
+    return parseFloat(Math.min(PRESS_MAX - 0.1, p).toFixed(3));
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function getTime(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+
+  function addLog(msg, type) {
+    const li = document.createElement('li');
+    li.className = 'log-item';
+    li.innerHTML = `<span class="log-time">${getTime(simTime)}</span><span class="${type}">${msg}</span>`;
+    const list = document.getElementById('log-list');
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 8) list.removeChild(list.lastChild);
+  }
+
+  // ── Main tick ──────────────────────────────────────────────────────────────
+  function tick() {
+    simTime += 5;
+    const ts = getTime(simTime);
+    document.getElementById('tick-time').textContent = ts;
+    labels.push(ts);
+    if (labels.length > MAX_PTS) labels.shift();
+
+    let anyAlert = false;
+
+    for (let i = 0; i < 3; i++) {
+      const temp  = tempModel(simTime / 5, i);
+      const press = pressModel(simTime / 5, i);
+
+      tData[i].push(parseFloat(temp.toFixed(1)));
+      pData[i].push(press);
+      if (tData[i].length > MAX_PTS) { tData[i].shift(); pData[i].shift(); }
+
+      // Update gauges
+      document.getElementById('t' + (i + 1)).textContent = temp.toFixed(1);
+      document.getElementById('p' + (i + 1)).textContent = press.toFixed(2);
+      document.getElementById('bt' + (i + 1)).style.width = (temp / TEMP_MAX * 100).toFixed(1) + '%';
+
+      const pPct     = press / PRESS_MAX * 100;
+      const alerting = press >= threshold;
+      const barEl    = document.getElementById('bp' + (i + 1));
+      barEl.style.width = pPct.toFixed(1) + '%';
+      barEl.className   = 'gauge-bar ' + (alerting ? 'bar-alert' : 'bar-press');
+
+      // Card & status dot
+      document.getElementById('vc' + (i + 1)).className = 'vessel-card' + (alerting ? ' alerting' : '');
+      document.getElementById('vs' + (i + 1)).className = 'vc-status'   + (alerting ? ' red'      : '');
+
+      // Log transitions
+      if (alerting && !prevAlert[i]) {
+        addLog(
+          'Vessel ' + (i + 1) + ' — pressure ' + press.toFixed(2) +
+          ' bar exceeds ' + threshold.toFixed(1) + ' bar threshold! Buzzer ON.',
+          'log-msg-alert'
+        );
+      } else if (!alerting && prevAlert[i]) {
+        addLog('Vessel ' + (i + 1) + ' — pressure normalised.', 'log-msg-ok');
+      }
+      prevAlert[i] = alerting;
+      if (alerting) anyAlert = true;
+    }
+
+    // Alert banner
+    if (anyAlert) {
+      document.getElementById('alert-banner').className = 'alert-banner visible';
+      document.getElementById('alert-msg').textContent =
+        'Pressure threshold exceeded on ' +
+        [0, 1, 2].filter(i => prevAlert[i]).map(i => 'Vessel ' + (i + 1)).join(', ') +
+        ' — buzzer active!';
+    } else {
+      document.getElementById('alert-banner').className = 'alert-banner';
+    }
+
+    // Periodic sync log
+    if (simTime % 30 === 0) {
+      const avgT = (tData[0].at(-1) + tData[1].at(-1) + tData[2].at(-1)) / 3;
+      addLog('Data synced to ThingSpeak + Blynk · Avg temp ' + avgT.toFixed(1) + '°C', 'log-msg-ok');
+    }
+
+    // Update charts
+    tChart.data.labels = [...labels];
+    pChart.data.labels = [...labels];
+    tChart.update('none');
+    pChart.update('none');
+  }
+
+  // ── Controls ───────────────────────────────────────────────────────────────
+  function setSpeed(s) {
+    speed = s === 'fast' ? 3 : 1;
+    document.getElementById('btn-slow').className = 'ctrl-btn' + (s === 'slow' ? ' active' : '');
+    document.getElementById('btn-fast').className = 'ctrl-btn' + (s === 'fast' ? ' active' : '');
+    clearInterval(intervalId);
+    intervalId = setInterval(tick, s === 'fast' ? 800 : 2000);
+  }
+
+  function updateThresh(v) {
+    threshold = parseFloat(v);
+    document.getElementById('thresh-label').textContent = parseFloat(v).toFixed(1) + ' bar';
+  }
+
+  function resetSim() {
+    simTime = 0;
+    labels.length = 0;
+    tData.forEach(d => d.length = 0);
+    pData.forEach(d => d.length = 0);
+    prevAlert = [false, false, false];
+
+    ['t1','t2','t3','p1','p2','p3'].forEach(id =>
+      document.getElementById(id).textContent = '--'
+    );
+    ['bt1','bt2','bt3','bp1','bp2','bp3'].forEach(id => {
+      const el = document.getElementById(id);
+      el.style.width = '0%';
+      el.className = 'gauge-bar ' + (id.startsWith('bt') ? 'bar-temp' : 'bar-press');
+    });
+    [1, 2, 3].forEach(i => {
+      document.getElementById('vc' + i).className = 'vessel-card';
+      document.getElementById('vs' + i).className = 'vc-status';
+    });
+
+    document.getElementById('alert-banner').className = 'alert-banner';
+    document.getElementById('log-list').innerHTML =
+      '<li class="log-item"><span class="log-time">00:00</span>' +
+      '<span class="log-msg-ok">System reset — monitoring restarted</span></li>';
+
+    tChart.update();
+    pChart.update();
+  }
+
+  // ── Start ──────────────────────────────────────────────────────────────────
+  intervalId = setInterval(tick, 2000);
+</script>
+
+</body>
+</html>
